@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dreamy Gallery - Smooth Nub Body</title>
+    <title>Dreamy Gallery - 3 Beams</title>
     <style>
         body { margin: 0; overflow: hidden; background-color: #FFDAB9; }
         canvas { display: block; cursor: grab; }
@@ -33,7 +33,7 @@
     </script>
 </head>
 <body>
-    <div id="loading">Smoothing curves...</div>
+    <div id="loading">Simplifying structure...</div>
     <div id="instructions">
         <b>Click & Drag</b> to Rotate Camera &bull; <b>Scroll</b> to Zoom<br>
         <b>W A S D</b> to Move Relative to Camera &bull; <b>SHIFT</b> to Sprint
@@ -237,18 +237,69 @@
                 return texture;
             }
 
+            // --- BEECHWOOD TEXTURE ---
+            function createBeechwoodTexture() {
+                const size = 512;
+                const canvas = document.createElement('canvas');
+                canvas.width = size;
+                canvas.height = size;
+                const ctx = canvas.getContext('2d');
+                
+                // Base color: Light natural beechwood
+                const c = new THREE.Color(0xD4B996);
+                ctx.fillStyle = `rgb(${c.r * 255}, ${c.g * 255}, ${c.b * 255})`;
+                ctx.fillRect(0, 0, size, size);
+                
+                const imgData = ctx.getImageData(0, 0, size, size);
+                const data = imgData.data;
+                
+                // Wood grain generation
+                for (let y = 0; y < size; y++) {
+                    for (let x = 0; x < size; x++) {
+                        const i = (y * size + x) * 4;
+                        // Horizontal grain with some variation
+                        const grain = Math.sin(y * 0.05 + Math.random() * 0.1) * 15;
+                        // Fine wood texture
+                        const texture = (Math.random() - 0.5) * 10;
+                        const variation = grain + texture;
+                        
+                        data[i] = Math.max(0, Math.min(255, data[i] + variation));
+                        data[i+1] = Math.max(0, Math.min(255, data[i+1] + variation * 0.8));
+                        data[i+2] = Math.max(0, Math.min(255, data[i+2] + variation * 0.6));
+                    }
+                }
+                
+                ctx.putImageData(imgData, 0, 0);
+                const texture = new THREE.CanvasTexture(canvas);
+                texture.wrapS = THREE.RepeatWrapping;
+                texture.wrapT = THREE.RepeatWrapping;
+                texture.repeat.set(4, 1); 
+                return texture;
+            }
+
             const colBeigePlant = 0xDEC4A6;
             const feltTexture = createNoiseTexture(colBeigePlant, 40, 1);
             const concreteTexture = createNoiseTexture(0xA9A9A9, 50, 4);
             const canvasTexture = createNoiseTexture(0xffffff, 15, 1);
-            const sculptureFeltTex = createNoiseTexture(0xAAAAAA, 120, 4); 
+            const sculptureFeltTex = createNoiseTexture(0xAAAAAA, 120, 4);
+            const beechwoodTexture = createBeechwoodTexture();
 
             const mats = {
                 wall: new THREE.MeshStandardMaterial({ color: 0xFFD1DC, roughness: 0.5 }), 
                 ceiling: new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.8 }), 
+                
+                // Beechwood Beam Material
+                beechwoodBeam: new THREE.MeshStandardMaterial({ 
+                    map: beechwoodTexture, 
+                    roughness: 0.8, 
+                    bumpMap: beechwoodTexture, 
+                    bumpScale: 0.02,
+                    side: THREE.DoubleSide 
+                }),
+                
                 glass: new THREE.MeshPhysicalMaterial({ roughness: 0, transmission: 1, thickness: 0.5, ior: 1.5, transparent: true }),
                 floor: new THREE.MeshStandardMaterial({ map: concreteTexture, roughness: 0.9, bumpMap: concreteTexture, bumpScale: 0.05 }), 
-                pedestal: new THREE.MeshStandardMaterial({ color: 0xfffdf0, roughness: 0.5 }),
+                pedestal: new THREE.MeshStandardMaterial({ map: concreteTexture, roughness: 0.9, bumpMap: concreteTexture, bumpScale: 0.05 }),
                 canvas: new THREE.MeshStandardMaterial({ map: canvasTexture, roughness: 0.8 }),
                 pot: new THREE.MeshStandardMaterial({ map: feltTexture, roughness: 1.0, bumpMap: feltTexture, bumpScale: 0.02 }),
                 leaf: new THREE.MeshStandardMaterial({ map: feltTexture, roughness: 1.0, bumpMap: feltTexture, bumpScale: 0.05, side: THREE.DoubleSide }),
@@ -292,10 +343,8 @@
         function createPlayer(m) {
             player = new THREE.Group();
             
-            // 1. Robot Body (UPDATED: Smooth Curve using Lathe)
-            // Creating a spline curve to get the perfect "nub" shape
+            // 1. Robot Body (Smooth Curve using Lathe)
             const points = [];
-            // Bottom tip (0,0) -> Nub curve -> Widest point -> Neck
             const curve = new THREE.SplineCurve([
                 new THREE.Vector2(0.0, 0.0),    // Tip
                 new THREE.Vector2(0.15, 0.08),  // Nub curve start
@@ -304,12 +353,11 @@
                 new THREE.Vector2(0.35, 0.70)   // Neck connection
             ]);
             
-            // Get points from curve for LatheGeometry
             const pathPoints = curve.getPoints(16); 
             const bodyGeo = new THREE.LatheGeometry(pathPoints, 32);
             
             const body = new THREE.Mesh(bodyGeo, m.playerBody);
-            body.position.y = 0.45; // Adjust vertical position to align with head
+            body.position.y = 0.45; 
             body.castShadow = true;
             player.add(body);
 
@@ -451,6 +499,17 @@
             roof.castShadow = true; 
             roof.receiveShadow = true; 
             scene.add(roof);
+
+            // UPDATED: Reduced to 3 Beams (-15, 0, 15)
+            const beamGeo = new THREE.BoxGeometry(79, 0.8, 0.8); 
+            // Loop step changed to 15 to get exactly 3 beams
+            for (let z = -15; z <= 15; z += 15) {
+                const beam = new THREE.Mesh(beamGeo, m.beechwoodBeam);
+                beam.position.set(-20, 9.6, z); 
+                beam.castShadow = true;
+                beam.receiveShadow = true;
+                scene.add(beam);
+            }
 
             createBackWindow(0, m, g); 
             createBackWindow(-20, m, g); 
