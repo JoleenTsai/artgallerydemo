@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dreamy Gallery - Concrete Floors</title>
+    <title>Dreamy Gallery - Felt Palette Sculptures</title>
     <style>
         body { margin: 0; overflow: hidden; background-color: #FFDAB9; }
         canvas { display: block; cursor: grab; }
@@ -16,9 +16,10 @@
         }
         #instructions {
             position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
-            color: #777; font-family: sans-serif; font-size: 16px;
-            background: rgba(255, 255, 255, 0.9); padding: 10px 20px; border-radius: 20px;
-            pointer-events: none; opacity: 0.9; text-align: center;
+            color: #555; font-family: sans-serif; font-size: 16px;
+            background: rgba(255, 255, 255, 0.9); padding: 12px 24px; border-radius: 30px;
+            pointer-events: none; opacity: 0.95; text-align: center;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
         }
     </style>
     
@@ -32,10 +33,10 @@
     </script>
 </head>
 <body>
-    <div id="loading">Pouring concrete...</div>
+    <div id="loading">Applying felt to sculptures...</div>
     <div id="instructions">
-        <b>Click & Drag</b> to Rotate &bull; <b>Scroll</b> to Zoom<br>
-        <b>W A S D</b> to Walk &bull; <b>SHIFT</b> to Run
+        <b>Click & Drag</b> to Rotate Camera &bull; <b>Scroll</b> to Zoom<br>
+        <b>W A S D</b> to Move Relative to Camera &bull; <b>SHIFT</b> to Sprint
     </div>
     
     <script type="module">
@@ -146,6 +147,9 @@
                 if (e.key === 'ArrowRight') keys.right = false;
                 if (e.key === 'Shift') keys.shift = false;
             });
+            window.addEventListener('blur', () => { Object.keys(keys).forEach(key => keys[key] = false); });
+            window.addEventListener('contextmenu', () => { Object.keys(keys).forEach(key => keys[key] = false); });
+
 
             const canvas = renderer.domElement;
             canvas.addEventListener('mousedown', (e) => {
@@ -199,39 +203,62 @@
                 scene.add(rectLight);
             }
 
-            // --- 3. MATERIALS ---
-            const colPlantUnified = 0xDEC4A6;
+            // --- 3. MATERIALS & TEXTURES ---
+            function createNoiseTexture(baseColorHex, noiseIntensity = 20, scale = 1) {
+                const size = 512;
+                const canvas = document.createElement('canvas');
+                canvas.width = size;
+                canvas.height = size;
+                const ctx = canvas.getContext('2d');
+                const c = new THREE.Color(baseColorHex);
+                ctx.fillStyle = `rgb(${c.r * 255}, ${c.g * 255}, ${c.b * 255})`;
+                ctx.fillRect(0, 0, size, size);
+                const imgData = ctx.getImageData(0, 0, size, size);
+                const data = imgData.data;
+                for (let i = 0; i < data.length; i += 4) {
+                    const noise = (Math.random() - 0.5) * noiseIntensity;
+                    data[i] = Math.max(0, Math.min(255, data[i] + noise));
+                    data[i+1] = Math.max(0, Math.min(255, data[i+1] + noise));
+                    data[i+2] = Math.max(0, Math.min(255, data[i+2] + noise));
+                }
+                ctx.putImageData(imgData, 0, 0);
+                const texture = new THREE.CanvasTexture(canvas);
+                texture.wrapS = THREE.RepeatWrapping;
+                texture.wrapT = THREE.RepeatWrapping;
+                texture.repeat.set(scale, scale);
+                return texture;
+            }
+
+            const colBeigePlant = 0xDEC4A6;
+            const feltTexture = createNoiseTexture(colBeigePlant, 40, 1);
+            const concreteTexture = createNoiseTexture(0xA9A9A9, 50, 4);
+            const canvasTexture = createNoiseTexture(0xffffff, 15, 1);
+            
+            // --- NEW SCULPTURE MATERIALS: FELT ---
+            // High-intensity noise for a strong felt/clay bump map
+            const sculptureFeltTex = createNoiseTexture(0xAAAAAA, 120, 4); 
 
             const mats = {
                 wall: new THREE.MeshStandardMaterial({ color: 0xFFD1DC, roughness: 0.5 }), 
                 ceiling: new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.8 }), 
                 glass: new THREE.MeshPhysicalMaterial({ roughness: 0, transmission: 1, thickness: 0.5, ior: 1.5, transparent: true }),
-                // UPDATED: Concrete Floor Material
-                floor: new THREE.MeshStandardMaterial({ color: 0xA9A9A9, roughness: 0.8 }), 
-                mint: new THREE.MeshStandardMaterial({ color: 0xb2e0d6, roughness: 0.3 }),
-                blue: new THREE.MeshStandardMaterial({ color: 0xaec6cf, roughness: 0.3 }),
+                floor: new THREE.MeshStandardMaterial({ map: concreteTexture, roughness: 0.9, bumpMap: concreteTexture, bumpScale: 0.05 }), 
                 pedestal: new THREE.MeshStandardMaterial({ color: 0xfffdf0, roughness: 0.5 }),
-                canvas: new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.5 }),
-                pot: new THREE.MeshStandardMaterial({ color: colPlantUnified, roughness: 0.9 }),
-                leaf: new THREE.MeshStandardMaterial({ color: colPlantUnified, roughness: 0.8, side: THREE.DoubleSide }),
-                stem: new THREE.MeshStandardMaterial({ color: colPlantUnified, roughness: 0.8 }),
-                cloud: new THREE.MeshStandardMaterial({ 
-                    color: 0xFFE5B4,      
-                    roughness: 0.9, 
-                    emissive: 0xFFC0CB,   
-                    emissiveIntensity: 0.1,
-                    transparent: true,
-                    opacity: 0.9,
-                    flatShading: true
-                }),
-                playerBody: new THREE.MeshStandardMaterial({ color: 0xe6e6fa, roughness: 0.3 }),
-                playerEye: new THREE.MeshStandardMaterial({ color: 0x333333, roughness: 0.1 })
+                canvas: new THREE.MeshStandardMaterial({ map: canvasTexture, roughness: 0.8 }),
+                pot: new THREE.MeshStandardMaterial({ map: feltTexture, roughness: 1.0, bumpMap: feltTexture, bumpScale: 0.02 }),
+                leaf: new THREE.MeshStandardMaterial({ map: feltTexture, roughness: 1.0, bumpMap: feltTexture, bumpScale: 0.05, side: THREE.DoubleSide }),
+                stem: new THREE.MeshStandardMaterial({ map: feltTexture, roughness: 1.0, bumpMap: feltTexture, bumpScale: 0.02 }),
+                cloud: new THREE.MeshStandardMaterial({ color: 0xFFE5B4, roughness: 0.9, emissive: 0xFFC0CB, emissiveIntensity: 0.1, transparent: true, opacity: 0.9, flatShading: true }),
+                playerBody: new THREE.MeshStandardMaterial({ color: 0xE6C288, roughness: 0.2, metalness: 0.9 }),
+                playerEye: new THREE.MeshStandardMaterial({ color: 0x333333, roughness: 0.1 }),
+                // Texture for the sculpture mats
+                sculptureFeltTex: sculptureFeltTex
             };
 
             const geos = {
                 pot: new THREE.CylinderGeometry(0.4, 0.35, 0.8, 32),
                 stem: new THREE.CylinderGeometry(0.05, 0.04, 2, 8).translate(0, 1, 0),
-                leaf: new THREE.CircleGeometry(0.5, 16).scale(0.5, 2.5, 1).translate(0, 1.25, 0),
+                leaf: new THREE.CircleGeometry(0.5, 32).scale(0.5, 2.5, 1).translate(0, 1.25, 0), 
                 cloudGeo: new THREE.SphereGeometry(5, 16, 12),
                 wall_standard: new THREE.BoxGeometry(20, 10, 0.2),
                 wall_divider: new THREE.BoxGeometry(0.2, 10, 16), 
@@ -278,22 +305,50 @@
             scene.add(player);
         }
 
+        // --- MOVEMENT LOGIC ---
         function updatePlayerMovement() {
             if(!player) return;
 
-            const moveSpeed = keys.shift ? 0.30 : 0.15; 
-            const rotSpeed = 0.04;
+            const moveSpeed = keys.shift ? 0.35 : 0.15; 
+            
+            const inputVector = new THREE.Vector3(0, 0, 0);
+            if (keys.w || keys.up) inputVector.z -= 1; 
+            if (keys.s || keys.down) inputVector.z += 1; 
+            if (keys.a || keys.left) inputVector.x -= 1; 
+            if (keys.d || keys.right) inputVector.x += 1; 
 
-            if (keys.w || keys.up) player.translateZ(moveSpeed); 
-            if (keys.s || keys.down) player.translateZ(-moveSpeed); 
-            if (keys.a || keys.left) player.rotation.y += rotSpeed; 
-            if (keys.d || keys.right) player.rotation.y -= rotSpeed; 
+            if (inputVector.lengthSq() > 0) {
+                inputVector.normalize();
 
+                const camDir = new THREE.Vector3();
+                camera.getWorldDirection(camDir);
+                camDir.y = 0; 
+                camDir.normalize();
+
+                const camRight = new THREE.Vector3();
+                camRight.crossVectors(camDir, new THREE.Vector3(0, 1, 0));
+
+                const moveVec = new THREE.Vector3();
+                moveVec.addScaledVector(camDir, -inputVector.z);
+                moveVec.addScaledVector(camRight, inputVector.x);
+                
+                moveVec.normalize().multiplyScalar(moveSpeed);
+
+                player.position.add(moveVec);
+
+                const targetRotation = Math.atan2(moveVec.x, moveVec.z);
+                const targetQuat = new THREE.Quaternion();
+                targetQuat.setFromAxisAngle(new THREE.Vector3(0, 1, 0), targetRotation);
+                player.quaternion.slerp(targetQuat, 0.15); 
+            }
+
+            // --- COLLISION ---
             if (player.position.z < -18.5) player.position.z = -18.5;
             if (player.position.z > 18.5) player.position.z = 18.5;
             if (player.position.x > 8.5) player.position.x = 8.5;
             if (player.position.x < -48.5) player.position.x = -48.5;
 
+            // --- CAMERA FOLLOW ---
             const x = cameraRadius * Math.sin(cameraElevation) * Math.sin(cameraAzimuth);
             const y = cameraRadius * Math.cos(cameraElevation);
             const z = cameraRadius * Math.sin(cameraElevation) * Math.cos(cameraAzimuth);
@@ -309,21 +364,20 @@
         // --- BUILDERS ---
 
         function buildArchitecture(m, g) {
-            // Floor
             const floor = new THREE.Mesh(new THREE.PlaneGeometry(120, 60), m.floor);
             floor.rotation.x = -Math.PI / 2; 
             floor.position.set(-20, 0, 0); 
             floor.receiveShadow = true; scene.add(floor);
 
-            // Roof
             const roof = new THREE.Mesh(new THREE.BoxGeometry(80, 0.2, 40), m.ceiling);
-            roof.position.set(-20, 10.1, 0); roof.castShadow = true; roof.receiveShadow = true; scene.add(roof);
+            roof.position.set(-20, 10.1, 0); 
+            roof.castShadow = true; 
+            roof.receiveShadow = true; 
+            scene.add(roof);
 
-            // Windows for Room 1 & 2
             createBackWindow(0, m, g); 
             createBackWindow(-20, m, g); 
             
-            // Room 3 Solid Back Wall
             const r3Back = new THREE.Mesh(g.wall_standard, m.wall);
             r3Back.position.set(-40, 5, -20);
             r3Back.receiveShadow = true; scene.add(r3Back);
@@ -337,7 +391,6 @@
                 scene.add(grp);
             }
 
-            // Right Side Window
             const sideWin = new THREE.Group();
             sideWin.add(createMesh(new THREE.BoxGeometry(0.2, 2, 40), m.wall, 10, 1, 0)); 
             sideWin.add(createMesh(new THREE.BoxGeometry(0.2, 2, 40), m.wall, 10, 9, 0)); 
@@ -346,21 +399,18 @@
             sideWin.add(createMesh(new THREE.BoxGeometry(0.1, 6, 36), m.glass, 10, 5, 0, false, false));
             scene.add(sideWin);
 
-            // Divider 1
             const div1 = new THREE.Group();
             div1.add(createMesh(new THREE.BoxGeometry(0.2, 3, 40), m.wall, -10, 8.5, 0)); 
             div1.add(createMesh(g.wall_divider, m.wall, -10, 5, -12)); 
             div1.add(createMesh(g.wall_divider, m.wall, -10, 5, 12));  
             scene.add(div1);
 
-            // Divider 2
             const div2 = new THREE.Group();
             div2.add(createMesh(new THREE.BoxGeometry(0.2, 3, 40), m.wall, -30, 8.5, 0)); 
             div2.add(createMesh(g.wall_divider, m.wall, -30, 5, -12)); 
             div2.add(createMesh(g.wall_divider, m.wall, -30, 5, 12));  
             scene.add(div2);
 
-            // Room 3 Far Side Wall
             const r3Side = new THREE.Mesh(g.wall_side, m.wall);
             r3Side.position.set(-50, 5, 0);
             r3Side.receiveShadow = true; scene.add(r3Side);
@@ -374,15 +424,35 @@
         }
 
         function placeArt(m, g) {
-            animatedObjects.art.push(createSculpture(-5, -5, new THREE.SphereGeometry(0.8, 64, 64), m.mint, 0.8));
-            animatedObjects.art.push(createSculpture(0, -2, new THREE.TorusKnotGeometry(0.6, 0.2, 128, 32), m.blue, 0.8));
-            animatedObjects.art.push(createSculpture(5, -6, new THREE.TorusGeometry(0.7, 0.2, 32, 100), m.mint, 0.9));
-            animatedObjects.art.push(createSculpture(-20, 8, new THREE.DodecahedronGeometry(0.7), m.mint, 0.8));
-            animatedObjects.art.push(createSculpture(-20, -8, new THREE.OctahedronGeometry(0.7), m.blue, 0.8));
-            animatedObjects.art.push(createSculpture(-40, 8, new THREE.TorusGeometry(0.5, 0.15, 16, 50), m.mint, 0.8));
-            animatedObjects.art.push(createSculpture(-40, -8, new THREE.ConeGeometry(0.7, 1.5, 4), m.blue, 0.9));
+            // --- 1. Extract Colors from the Palette Image ---
+            const paletteColors = [
+                0x00A8E8, // Bright Blue
+                0xFF5A6E, // Salmon Pink
+                0x8DE3B8, // Mint Green
+                0xFFBE61, // Orange
+                0xFA8EC1  // Bubblegum Pink
+            ];
 
-            // --- ROOM 1 (Side Art) ---
+            // --- 2. Create Felt Materials ---
+            // High roughness and no metalness for a non-shiny, fabric-like look
+            const scMats = paletteColors.map(color => new THREE.MeshStandardMaterial({
+                color: color,
+                roughness: 1.0,
+                metalness: 0.0,
+                bumpMap: m.sculptureFeltTex,
+                bumpScale: 0.08
+            }));
+
+            // --- 3. Assign Felt Materials to Sculptures ---
+            // Cycling through the 5 palette colors
+            animatedObjects.art.push(createSculpture(-5, -5, new THREE.SphereGeometry(0.8, 64, 64), scMats[0], 0.8));
+            animatedObjects.art.push(createSculpture(0, -2, new THREE.TorusKnotGeometry(0.6, 0.2, 128, 32), scMats[1], 0.8));
+            animatedObjects.art.push(createSculpture(5, -6, new THREE.TorusGeometry(0.7, 0.2, 32, 100), scMats[2], 0.9));
+            animatedObjects.art.push(createSculpture(-20, 8, new THREE.DodecahedronGeometry(0.7), scMats[3], 0.8));
+            animatedObjects.art.push(createSculpture(-20, -8, new THREE.OctahedronGeometry(0.7), scMats[4], 0.8));
+            animatedObjects.art.push(createSculpture(-40, 8, new THREE.TorusGeometry(0.5, 0.15, 16, 50), scMats[0], 0.8));
+            animatedObjects.art.push(createSculpture(-40, -8, new THREE.ConeGeometry(0.7, 1.5, 4), scMats[1], 0.9));
+
             createCanvas(1.5, 3, 9.4, 5, 19, -Math.PI/2);
             createCanvas(1.5, 3, 9.4, 5, -19, -Math.PI/2);
             createCanvas(2, 3, -9.4, 6.5, -12, Math.PI/2); 
@@ -394,40 +464,31 @@
             createCanvas(1.5, 1.5, -9.4, 5, -8, Math.PI/2);
             createCanvas(1.5, 1.5, -9.4, 2, -8, Math.PI/2);
 
-            // --- ROOM 2 (MIDDLE ROOM) - DENSE "SALON STYLE" ---
-            
-            // Left Wall (Divider 1, X = -10.6)
-            // Z > 6 (Safe)
             createCanvas(3, 4, -10.6, 5, 12, -Math.PI/2);
-            createCanvas(6, 6, -10.6, 5, 9, -Math.PI/2); // Big square
+            createCanvas(6, 6, -10.6, 5, 9, -Math.PI/2); 
             createCanvas(1.5, 1.5, -10.6, 8.5, 16, -Math.PI/2);
             createCanvas(1.5, 1.5, -10.6, 6.5, 16, -Math.PI/2);
             createCanvas(1.5, 1.5, -10.6, 4.5, 16, -Math.PI/2);
             createCanvas(1.5, 1.5, -10.6, 2.5, 16, -Math.PI/2);
 
-            // Z < -6 (Safe)
             createCanvas(3, 4, -10.6, 5, -12, -Math.PI/2);
-            createCanvas(6, 6, -10.6, 5, -9, -Math.PI/2); // Big square
+            createCanvas(6, 6, -10.6, 5, -9, -Math.PI/2); 
             createCanvas(2, 2, -10.6, 8, -16, -Math.PI/2);
             createCanvas(2, 2, -10.6, 5, -16, -Math.PI/2);
             createCanvas(2, 2, -10.6, 2, -16, -Math.PI/2);
 
-            // Right Wall (Divider 2, X = -29.4)
-            // Z > 6 (Safe)
-            createCanvas(5, 7, -29.4, 5, 9, Math.PI/2); // Tall statement
+            createCanvas(5, 7, -29.4, 5, 9, Math.PI/2); 
             createCanvas(2, 2, -29.4, 8, 14, Math.PI/2);
             createCanvas(2, 2, -29.4, 5, 14, Math.PI/2);
             createCanvas(2, 2, -29.4, 2, 14, Math.PI/2);
             createCanvas(2, 4, -29.4, 5, 17, Math.PI/2);
 
-            // Z < -6 (Safe)
-            createCanvas(5, 7, -29.4, 5, -9, Math.PI/2); // Tall statement
+            createCanvas(5, 7, -29.4, 5, -9, Math.PI/2); 
             createCanvas(1.5, 4, -29.4, 5, -16, Math.PI/2); 
             createCanvas(1, 1, -29.4, 8, -16, Math.PI/2);
             createCanvas(1, 1, -29.4, 2, -16, Math.PI/2);
             createCanvas(2, 3, -29.4, 5, -13, Math.PI/2);
 
-            // --- ROOM 3 (The Gallery Finale) ---
             createCanvas(4, 3, -30.6, 5, 10, -Math.PI/2);
             createCanvas(1.5, 2, -30.6, 7.5, 15, -Math.PI/2);
             createCanvas(1.5, 2, -30.6, 2.5, 15, -Math.PI/2);
